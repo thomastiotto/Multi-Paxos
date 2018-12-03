@@ -107,3 +107,32 @@ def read_message(data):
 	}
 
 	return msg_contents
+
+
+# def create_instance(inst_dict, instance, v):
+#
+# 	new_instance = instance + 1
+# 	inst_dict[new_instance] = {}
+# 	inst_dict[new_instance]["v"] = v
+# 	inst_dict[new_instance]["c_rnd"] = 1
+# 	inst_dict[new_instance]["V"] = (None, None)
+# 	inst_dict[new_instance]["c_val"] = None
+#
+# 	return inst_dict
+
+
+class Instance():
+
+	instance = 0
+
+	def __init__(self, v):
+
+		self.id = Instance.instance
+		self.v = v
+		self.c_rnd = 1
+		self.V = (None, None)
+		self.c_val = None
+
+		Instance.instance = Instance.instance + 1
+
+

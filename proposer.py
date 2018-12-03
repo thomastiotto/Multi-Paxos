@@ -42,12 +42,9 @@ class Proposer:
 		self.last_leader = 1 #default leader is the one with id 1
 		self.last_leader_alive_msg = None
 
-		self.state = {} # TODO implementare stato usando dizionario indicizzato per istanza
-
-		self.v_rnd_received_1b = [] #TODO da sistemare i buffer
-		self.v_val_received_1b = []
-		self.largest_v_rnd = None
-		self.v_rnd_received_2b = []
+		# instance stuff
+		self.state = [] # TODO implementare stato usando dizionario indicizzato per istanza
+		self.instance = 0 # TODO se un leader muore gli altri dovrebbero ricominciare dall'ultima istanza
 
 		# setup sockets
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
@@ -55,26 +52,17 @@ class Proposer:
 
 	def handle_proposal(self, msg_prop):
 
-		# global c_rnd, v, largest_v_rnd, v_rnd_received_1b, v_val_received_1b, v_rnd_received_2b
 
-		# proposer's proposal
-		self.v = msg_prop["v_val"]
+		# start new instance with rnd=1 and v as proposal
+		# self.state = hp.create_instance(self.state, self.instance, msg_prop["v_val"])
+		self.state.append(hp.Instance(msg_prop["v_val"]))
 
-		# start new instance with round 0 # TODO farlo
-		self.c_rnd = time.time() # TODO time non va bene!  usare interi da 0
-
-		# reset memory for new round
-		self.v_rnd_received_1b = []
-		self.v_val_received_1b = []
-		self.largest_v_rnd = None
-		self.v_rnd_received_2b = []
-
-		logging.debug("Proposer {} \n\tReceived message PROPOSAL from Client {} v_val={}".format(self.id, msg_prop["sender_id"], self.v))
+		logging.debug("Proposer {} \n\tReceived message PROPOSAL from Client {} v_val={}".format(self.id, msg_prop["sender_id"], msg_prop["v_val"]))
 
 		msg_1a = hp.create_message(sender_id=self.id, phase="PHASE1A", c_rnd=self.c_rnd)
 		self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
 
-		logging.debug("Proposer {} \n\tSent message 1A to Acceptors c_rnd={} v_val={}".format(self.id, self.c_rnd, self.v))
+		logging.debug("Proposer {} \n\tSent message 1A to Acceptors c_rnd={} v_val={}".format(self.id, self.c_rnd, msg_prop["v_val"]))
 
 		return
 
