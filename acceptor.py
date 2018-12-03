@@ -45,7 +45,7 @@ class Acceptor():
 		if msg_1a["c_rnd"] > self.rnd:
 			self.rnd = msg_1a["c_rnd"]
 
-			msg_1b = hp.create_message(sender_id=self.id, rnd=self.rnd, v_rnd=self.v_rnd, v_val=self.v_val)
+			msg_1b = hp.create_message(sender_id=self.id, phase="PHASE1B", rnd=self.rnd, v_rnd=self.v_rnd, v_val=self.v_val)
 			self.writeSock.sendto(msg_1b, hp.send_to_role("proposers"))
 
 			logging.debug("Acceptor {} \n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, msg_1a["sender_id"], self.rnd,
@@ -56,7 +56,7 @@ class Acceptor():
 
 	def handle_2a(self, msg_2a):
 
-		logging.debug("Acceptor {} \n\tReceived message 2A from Proposer {} c_rnd={} c_val={}".format(id, msg_2a["sender_id"], msg_2a["c_rnd"], msg_2a["c_val"]))
+		logging.debug("Acceptor {} \n\tReceived message 2A from Proposer {} c_rnd={} c_val={}".format(self.id, msg_2a["sender_id"], msg_2a["c_rnd"], msg_2a["c_val"]))
 
 		# discard old proposals
 		if msg_2a["c_rnd"] < self.rnd:
@@ -65,10 +65,10 @@ class Acceptor():
 		self.v_rnd = msg_2a["c_rnd"]
 		self.v_val = msg_2a["c_val"]
 
-		msg_2b = hp.create_message(sender_id=self.id, v_rnd=self.v_rnd, v_val=self.v_val)
+		msg_2b = hp.create_message(sender_id=self.id, phase="PHASE2B", v_rnd=self.v_rnd, v_val=self.v_val)
 		self.writeSock.sendto(msg_2b, hp.send_to_role("proposers"))
 
-		logging.debug("Acceptor {} \n\tSent message 2B to Proposer {} v_rnd={} v_val={}".format(id, sender_id, v_rnd, v_val))
+		logging.debug("Acceptor {} \n\tSent message 2B to Proposer {} v_rnd={} v_val={}".format(self.id, msg_2a["sender_id"], self.v_rnd, self.v_val))
 
 		return
 
@@ -79,7 +79,8 @@ class Acceptor():
 
 		while True:
 
-			logging.debug("Acceptor {} \n\tWaiting for message".format(self.id))
+			# logging.debug("Acceptor {} \n\tWaiting for message".format(self.id))
+
 			data, _ = self.readSock.recvfrom(1024)
 			msg = hp.read_message(data)
 			self.switch_handler[msg["phase"]](msg)

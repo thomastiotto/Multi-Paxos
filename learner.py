@@ -28,7 +28,7 @@ class Learner:
 
 		while True:
 
-			logging.debug("Proposer {} \n\tWaiting for message".format(self.id))
+			# logging.debug("Proposer {} \n\tWaiting for message".format(self.id))
 
 			data, _ = self.readSock.recvfrom(1024)
 			msg = hp.read_message(data)
