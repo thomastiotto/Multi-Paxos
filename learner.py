@@ -13,6 +13,7 @@ if args["debug"] is not None:
 	logging.basicConfig(level=args["debug"].upper())
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
+
 class Learner:
 
 	def __init__(self):
@@ -28,13 +29,15 @@ class Learner:
 
 		while True:
 
-			# logging.debug("Proposer {} \n\tWaiting for message".format(self.id))
+			# logging.debug("Learner {} \n\tWaiting for message".format(self.id))
 
 			data, _ = self.readSock.recvfrom(1024)
 			msg = hp.read_message(data)
 
 			if msg["phase"] == "DECISION": # TODO implementare logica di catchup
-				print("Learner {} \n\tReceived DECISION from Proposer {} v_val={}".format(self.id, msg["sender_id"], msg["v_val"]))
+				logging.debug("Learner {}, Instance {} \n\tReceived DECISION from Proposer {} v_val={}".format(self.id, msg["instance_num"], msg["sender_id"], msg["v_val"]))
+				if args["debug"] is None:
+					print(msg["v_val"])
 
 
 if __name__ == '__main__':

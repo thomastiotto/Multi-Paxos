@@ -35,40 +35,52 @@ class Acceptor():
 		self.v_rnd = 0
 		self.v_val = None
 
+		self.state = {}
+		self.greatest_instance = 0 # TODO vedere se mettere qua o in proposer
+
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
 
 	def handle_1a(self, msg_1a):
 
-		logging.debug("Acceptor {} \n\tReceived message 1A from Proposer {} c_rnd={}".format(self.id, msg_1a["sender_id"], msg_1a["c_rnd"]))
+		logging.debug("Acceptor {}, Instance {}\n\tReceived message 1A from Proposer {} c_rnd={}".format(self.id,
+		                                                                                                 msg_1a["instance_num"],
+		                                                                                                 msg_1a["sender_id"],
+		                                                                                                 msg_1a["c_rnd"]))
 
-		if msg_1a["c_rnd"] > self.rnd:
-			self.rnd = msg_1a["c_rnd"]
+		instance = msg_1a["instance_num"]
 
-			msg_1b = hp.create_message(sender_id=self.id, phase="PHASE1B", rnd=self.rnd, v_rnd=self.v_rnd, v_val=self.v_val)
+		# start logging new instance
+		self.state[instance] = hp.Instance(instance, self.id) # TODO check se istanza esiste già
+		instance_state = self.state[instance]
+
+		if msg_1a["c_rnd"] > instance_state.rnd:
+			instance_state.rnd = msg_1a["c_rnd"]
+
+			msg_1b = hp.create_message(instance_num=instance ,sender_id=self.id, phase="PHASE1B", rnd=instance_state.rnd, v_rnd=instance_state.v_rnd, v_val=instance_state.v_val)
 			self.writeSock.sendto(msg_1b, hp.send_to_role("proposers"))
 
-			logging.debug("Acceptor {} \n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, msg_1a["sender_id"], self.rnd,
-			                                                                                          self.v_rnd, self.v_val))
+			logging.debug("Acceptor {}, Instance {}\n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, instance, msg_1a["sender_id"], instance_state.rnd, instance_state.v_rnd, instance_state.v_val))
 
 		return
 
 
 	def handle_2a(self, msg_2a):
 
-		logging.debug("Acceptor {} \n\tReceived message 2A from Proposer {} c_rnd={} c_val={}".format(self.id, msg_2a["sender_id"], msg_2a["c_rnd"], msg_2a["c_val"]))
+		logging.debug("Acceptor {}, Instance {} \n\tReceived message 2A from Proposer {} c_rnd={} c_val={}".format(self.id, msg_2a["instance_num"], msg_2a["sender_id"], msg_2a["c_rnd"], msg_2a["c_val"]))
+
+		instance = msg_2a["instance_num"]
+		instance_state = self.state[instance]
 
 		# discard old proposals
-		if msg_2a["c_rnd"] < self.rnd:
-			return
+		if msg_2a["c_rnd"] >= instance_state.c_rnd:
+			instance_state.v_rnd = msg_2a["c_rnd"]
+			instance_state.v_val = msg_2a["c_val"]
 
-		self.v_rnd = msg_2a["c_rnd"]
-		self.v_val = msg_2a["c_val"]
+			msg_2b = hp.create_message(instance_num=instance, sender_id=self.id, phase="PHASE2B", v_rnd=instance_state.v_rnd, v_val=instance_state.v_val)
+			self.writeSock.sendto(msg_2b, hp.send_to_role("proposers"))
 
-		msg_2b = hp.create_message(sender_id=self.id, phase="PHASE2B", v_rnd=self.v_rnd, v_val=self.v_val)
-		self.writeSock.sendto(msg_2b, hp.send_to_role("proposers"))
-
-		logging.debug("Acceptor {} \n\tSent message 2B to Proposer {} v_rnd={} v_val={}".format(self.id, msg_2a["sender_id"], self.v_rnd, self.v_val))
+			logging.debug("Acceptor {}, Instance {} \n\tSent message 2B to Proposer {} v_rnd={} v_val={}".format(self.id, instance, msg_2a["sender_id"], instance_state.v_rnd, instance_state.v_val))
 
 		return
 

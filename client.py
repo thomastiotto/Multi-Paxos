@@ -6,10 +6,8 @@ import argparse
 # parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("id", type=int)
-ap.add_argument("values", type=str)
+ap.add_argument("-v", "--values")
 ap.add_argument("-d", "--debug")
-ap.add_argument("-i", "--interactive")
-ap.add_argument("-v", "--value")
 args = vars(ap.parse_args())
 
 # set debug level
@@ -35,7 +33,7 @@ class Client:
 		logging.debug("I'm {} and my address is ({})".format(self.role, self.multicast_group))
 
 		while True:
-			if args["interactive"] is None:
+			if args["values"] is not None:
 				# open input values file
 				working_directory = os.getcwd()
 				file_path = working_directory + args["values"]
@@ -43,15 +41,17 @@ class Client:
 
 				if f.mode == "r":
 					contents = f.read().splitlines()
-					for i in contents:
-						v = i
+					for value in contents:
+						msg_proposal = hp.create_message(sender_id=self.id, phase="PROPOSAL", v_val=value)
+						self.writeSock.sendto(msg_proposal, hp.send_to_role("proposers"))
+						logging.debug("Client {} \n\tSent PROPOSAL {} to Proposers".format(self.id, value))
+					args["values"] = None
 			else:
-				v = input('\nEnter value to send to proposer:')
+				value = input('\nEnter value to send to proposer:')
+				msg_proposal = hp.create_message(sender_id=self.id, phase="PROPOSAL", v_val=value)
+				self.writeSock.sendto(msg_proposal, hp.send_to_role("proposers"))
+				logging.debug("Client {} \n\tSent PROPOSAL {} to Proposers".format(self.id, value))
 
-			msg_proposal = hp.create_message(sender_id=self.id, phase="PROPOSAL", v_val=v)
-			self.writeSock.sendto(msg_proposal, hp.send_to_role("proposers"))
-
-			logging.debug("Client {} \n\tSent PROPOSAL {} to Proposers".format(self.id, v))
 
 
 if __name__ == "__main__":
