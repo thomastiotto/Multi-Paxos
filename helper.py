@@ -1,7 +1,7 @@
 import socket
 import struct
 import os
-import json
+import pickle
 
 role_ports = {"clients":   0,
               "proposers": 0,
@@ -84,40 +84,82 @@ def read_conf():
 			multicast_address = address
 
 
-def create_message(sender_id, receiver_id=None, instance_num=None, rnd=None, phase=None, c_rnd=None, c_val=None, v_rnd=None,
-                   v_val=None, time=None):
-	msg = (sender_id, receiver_id, instance_num, rnd, phase, c_rnd, c_val, v_rnd, v_val, time)
+class Message():
 
-	return json.dumps(msg).encode()
+	def __init__(self, instance_num, sender_id, phase, receiver_id=None, rnd=None, c_rnd=None, c_val=None, v_rnd=None, v_val=None, time=None):
+		self.instance_num = instance_num
+		self.sender_id = sender_id
+		self.phase = phase
+		self.receiver_id = receiver_id
+		self.rnd = rnd
+		self.c_rnd = c_rnd
+		self.c_val = c_val
+		self.v_rnd = v_rnd
+		self.v_val = v_val
+		self.time = time
 
 
-def read_message(data):
-	msg = json.loads(data.decode())
-	msg_contents = {
-		"sender_id":    msg[0],
-		"receiver_id":  msg[1],
-		"instance_num": msg[2],
-		"rnd":          msg[3],
-		"phase":        msg[4],
-		"c_rnd":        msg[5],
-		"c_val":        msg[6],
-		"v_rnd":        msg[7],
-		"v_val":        msg[8],
-		"time":         msg[9]
-	}
+	@classmethod
+	def create_proposal(cls, sender_id, v_val):
+		instance = -1
+		msg = cls(instance, sender_id, "PROPOSAL", v_val=v_val)
 
-	return msg_contents
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_1a(cls, instance, sender_id, c_rnd):
+		msg = cls(instance, sender_id, "PHASE1A", c_rnd=c_rnd)
+
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_1b(cls, instance, sender_id, rnd, v_rnd, v_val):
+		msg = cls(instance, sender_id, "PHASE1B", rnd=rnd, v_rnd=v_rnd, v_val=v_val)
+
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_2a(cls, instance, sender_id, c_rnd, v):
+		msg = cls(instance, sender_id, "PHASE2A", c_rnd=c_rnd, c_val=v)
+
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_2b(cls, instance, sender_id, v_rnd, v_val):
+		msg = cls(instance, sender_id, "PHASE2B", v_rnd=v_rnd, v_val=v_val)
+
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_decision(cls, instance, sender_id, v_val):
+		msg = cls(instance, sender_id, "DECISION", v_val=v_val)
+
+		return pickle.dumps(msg)
+
+
+	@classmethod
+	def create_leaderalive(cls, instance, sender_id, time):
+		msg = cls(instance, sender_id, "LEADERALIVE", time=time)
+
+		return pickle.dumps(msg)
+
+
+	@staticmethod
+	def read_message(data):
+		msg = pickle.loads(data)
+
+		return msg
 
 
 class Instance():
 
 	def __init__(self, instance, proc_id=None, v=None):
 
-		self.inst = instance
+		self.instance_num = instance
 
 		###### PROPOSER ######
 		self.v = v
-		self.c_rnd = proc_id * instance # TODO inizializza a 1*id processo
+		self.c_rnd = proc_id * instance
 		self.c_val = None
 		self.largest_v_rnd = 0
 		self.largest_v_val = None
@@ -128,3 +170,5 @@ class Instance():
 		self.v_val = None
 		self.v_rnd = 0
 		self.rnd = 0
+
+# TODO fare una classe Message?

@@ -42,13 +42,13 @@ class Client:
 				if f.mode == "r":
 					contents = f.read().splitlines()
 					for value in contents:
-						msg_proposal = hp.create_message(sender_id=self.id, phase="PROPOSAL", v_val=value)
+						msg_proposal = hp.Message.create_proposal(self.id, value)
 						self.writeSock.sendto(msg_proposal, hp.send_to_role("proposers"))
 						logging.debug("Client {} \n\tSent PROPOSAL {} to Proposers".format(self.id, value))
-					args["values"] = None
+					args["values"] = None # don't loop forever sending values from file
 			else:
 				value = input('\nEnter value to send to proposer:')
-				msg_proposal = hp.create_message(sender_id=self.id, phase="PROPOSAL", v_val=value)
+				msg_proposal = hp.Message.create_proposal(self.id, value)
 				self.writeSock.sendto(msg_proposal, hp.send_to_role("proposers"))
 				logging.debug("Client {} \n\tSent PROPOSAL {} to Proposers".format(self.id, value))
 

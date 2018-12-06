@@ -15,8 +15,6 @@ if args["debug"] is not None:
 	logging.basicConfig(level=args["debug"].upper())
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
-# TODO il leader si deve salvare i messaggi dei clients in una coda
-# TODO ogni proposer può far partire il suo round dentro una istanza ex. P1 fa partire 1, 11, 21 ... se ho 10 proposers al max
 # TODO i proposer devono scambiarsi lo state così se uno crasha gli altri ricominciano dall'istanza corretta?
 
 class Proposer:
@@ -37,8 +35,6 @@ class Proposer:
 
 		self.role = "proposers"
 		self.id = args["id"]
-		self.c_rnd = 0
-		self.v = None
 
 		#leader election stuff
 		self.leader_number = 4
@@ -46,7 +42,7 @@ class Proposer:
 		self.last_leader_alive_msg = None
 
 		# instance stuff
-		self.state = {} # TODO implementare stato usando dizionario indicizzato per istanza
+		self.state = {}
 		self.instance = None # TODO se un leader muore gli altri dovrebbero ricominciare dall'ultima istanza
 		self.last_instance = 0
 
@@ -56,16 +52,16 @@ class Proposer:
 
 	def handle_proposal(self, msg_prop):
 
+		self.last_instance += 1 # TODO tutti i proposer devono salvarsi sta merda
 		if self.is_leader():
-			self.last_instance += 1 # TODO tutti i proposer devono salvarsi sta merda
 			# start new instance with c_rnd=my_id*instance_number and v as proposal
-			self.state[self.last_instance] = hp.Instance(self.last_instance, self.id, msg_prop["v_val"])
+			self.state[self.last_instance] = hp.Instance(self.last_instance, self.id, msg_prop.v_val)
 
 			logging.debug("Proposer {} \n\tReceived message PROPOSAL from Client {} v_val={}".format(self.id,
-			                                                                                         msg_prop["sender_id"],
-			                                                                                         msg_prop["v_val"]))
+			                                                                                         msg_prop.sender_id,
+			                                                                                         msg_prop.v_val))
 
-			msg_1a = hp.create_message(instance_num=self.last_instance, sender_id=self.id, phase="PHASE1A", c_rnd=self.state[self.last_instance].c_rnd)
+			msg_1a = hp.Message.create_1a(self.last_instance, self.id, self.state[self.last_instance].c_rnd)
 			self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
 
 			logging.debug("Proposer {}, Instance {} \n\tSent message 1A to Acceptors c_rnd={}".format(self.id, self.last_instance, self.state[self.last_instance].c_rnd))
@@ -75,29 +71,27 @@ class Proposer:
 
 	def handle_1b(self, msg_1b):
 
-		# global largest_v_rnd, v_rnd_received_1b, c_val, v_val_received_1b # TODO refactor
-
 		# only look at messages addressed to me and for current round
 		# if msg_1b["sender_id"] != self.id or msg_1b["rnd"] != self.c_rnd:
 		# 	return
 		if self.is_leader():
 			logging.debug("Proposer {}, Instance {} \n\tReceived message 1B from Acceptor {} rnd={} v_rnd={} v_val={}".format(self.id,
-			                                                                                                                  msg_1b["instance_num"],
-			                                                                                                                  msg_1b["sender_id"],
-			                                                                                                                  msg_1b["rnd"],
-			                                                                                                                  msg_1b["v_rnd"],
-			                                                                                                                  msg_1b["v_val"]))
+			                                                                                                                  msg_1b.instance_num,
+			                                                                                                                  msg_1b.sender_id,
+			                                                                                                                  msg_1b.rnd,
+			                                                                                                                  msg_1b.v_rnd,
+			                                                                                                                  msg_1b.v_val))
 
-		instance = msg_1b["instance_num"]
+		instance = msg_1b.instance_num
 		instance_state = self.state[instance]
 
-		if instance_state.c_rnd == msg_1b["rnd"]:
+		if instance_state.c_rnd == msg_1b.rnd:
 			instance_state.quorum_1b += 1
 
 		# save largest (v_rnd, v_val) tuple
-		if msg_1b["v_rnd"] >= instance_state.largest_v_rnd:
-			instance_state.largest_v_rnd = msg_1b["v_rnd"]
-			instance_state.largest_v_val = msg_1b["v_val"]
+		if msg_1b.v_rnd >= instance_state.largest_v_rnd:
+			instance_state.largest_v_rnd = msg_1b.v_rnd
+			instance_state.largest_v_val = msg_1b.v_val
 
 		# if we have enough messages
 		if instance_state.quorum_1b >= self.QUORUM_SIZE:
@@ -109,52 +103,44 @@ class Proposer:
 				# send largest v_val received in this instance
 				v = instance_state.largest_v_val
 
-			msg_2a = hp.create_message(instance_num=instance,
-			                           phase="PHASE2A",
-			                           sender_id=self.id,
-			                           c_rnd=instance_state.c_rnd,
-			                           c_val=v)
-
+			msg_2a = hp.Message.create_2a(instance, self.id, instance_state.c_rnd, v)
 			self.writeSock.sendto(msg_2a, hp.send_to_role("acceptors"))
 
 			logging.debug("Proposer {}, Instance {} \n\tSent message 2A to Acceptors c_rnd={} c_val={}".format(self.id,
-			                                                                                                   instance,
-				                                                                                                   instance_state.c_rnd,
-				                                                                                                   v))
+			                                                                                                    instance,
+				                                                                                                instance_state.c_rnd,
+				                                                                                                v))
 
 		return
 
 
-	def handle_2b(self, msg_2b):
+	def handle_2b(self, msg_2b): # TODO anche se non è leader deve registrarsi l'ultima istanza per rimanere sincronizzato
 
 		# only look at messages addressed to me and for current round
 		# if msg_2b["sender_id"] != self.id:
 		# 	return
 
 		logging.debug("Proposer {}, Instance {} \n\tReceived message 2B from Acceptor {} v_rnd={} v_val={}".format(self.id,
-		                                                                                                           msg_2b["instance_num"],
-		                                                                                                           msg_2b["sender_id"],
-		                                                                                                           msg_2b["v_rnd"],
-		                                                                                                           msg_2b["v_val"]))
-		instance = msg_2b["instance_num"]
+		                                                                                                           msg_2b.instance_num,
+		                                                                                                           msg_2b.sender_id,
+		                                                                                                           msg_2b.v_rnd,
+		                                                                                                           msg_2b.v_val))
+		instance = msg_2b.instance_num
 		instance_state = self.state[instance]
 
 		# record messages in this round
-		instance_state.quorum_2b.append(msg_2b["v_rnd"])
+		instance_state.quorum_2b.append(msg_2b.v_rnd)
 
 
 		# if we have enough messages
 		if len(instance_state.quorum_2b) >= self.QUORUM_SIZE:
 			if all(item == instance_state.c_rnd for item in instance_state.quorum_2b):
-				msg_decision = hp.create_message(instance_num=instance,
-				                                 sender_id=self.id,
-				                                 phase="DECISION",
-				                                 v_val=msg_2b["v_val"])
+				msg_decision = hp.Message.create_decision(instance, self.id, msg_2b.v_val)
 				self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
 
 				logging.debug("Proposer {}, Instance {} \n\tSent message DECISION to Learners v_val={}".format(self.id,
 				                                                                                               instance,
-				                                                                                               msg_2b["v_val"]))
+				                                                                                               msg_2b.v_val))
 
 		return
 
@@ -168,11 +154,10 @@ class Proposer:
 	# Save the last LEADERALIVE message received
 	def handle_leader_alive(self, msg_alive):
 
-		if msg_alive["sender_id"] == self.id: # don't save own leader alive messages or risk never yelding
+		if msg_alive.sender_id == self.id: # don't save own leader alive messages or risk never yelding
 			return
 		else:
-			self.last_leader_alive_msg = msg_alive
-			# self.last_instance = msg_alive["instance_num"] # keep track of last instance leader has started # TODO capire se metterlo qua
+			self.last_leader_alive_msg = msg_alive # TODO capire se metterlo qua
 
 		return
 
@@ -184,7 +169,7 @@ class Proposer:
 			# logging.debug("Time {}\tLeader {} \n\tSending LEADERALIVE".format(int(time.time()),self.id))
 
 			# send LEADERALIVE adding the last instance this leader has started
-			msg_alive = hp.create_message(sender_id=self.id, phase="LEADERALIVE", time=time.time(), instance_num=self.last_instance)
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 		return
@@ -201,11 +186,8 @@ class Proposer:
 
 			self.last_leader = self.id  # elect myself as new leader
 
-			msg_alive = hp.create_message(sender_id=self.id, phase="LEADERALIVE", time=time.time(), instance_num=self.last_instance)
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
-
-			# add faux LEADERALIVE message
-			# self.last_leader_alive_msg = hp.read_message(hp.create_message(sender_id=self.id, phase="LEADERALIVE", time=time.time()+2))
 
 			return
 
@@ -219,7 +201,7 @@ class Proposer:
 
 			self.last_leader = self.id  # elect myself as new leader
 
-			msg_alive = hp.create_message(sender_id=self.id, phase="LEADERALIVE", time=time.time(), instance_num=self.last_instance)
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 			return
@@ -232,7 +214,7 @@ class Proposer:
 
 				self.last_leader = self.id  # elect myself as new leader
 
-				msg_alive = hp.create_message(sender_id=self.id, phase="LEADERALIVE", time=time.time(), instance_num=self.last_instance)
+				msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
 				self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 			else:
 				if not self.is_leader():
@@ -274,9 +256,9 @@ class Proposer:
 			# logging.debug("Proposer {} \n\tWaiting for message".format(self.id))
 
 			data, _ = self.readSock.recvfrom(1024)
-			msg = hp.read_message(data)
+			msg = hp.Message.read_message(data)
 			# handle message with correct function
-			self.switch_handler[msg["phase"]](msg)
+			self.switch_handler[msg.phase](msg)
 
 
 if __name__ == "__main__":
