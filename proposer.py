@@ -52,7 +52,8 @@ class Proposer:
 
 	def handle_proposal(self, msg_prop):
 
-		self.last_instance += 1 # TODO tutti i proposer devono salvarsi sta merda
+		self.last_instance += 1
+
 		if self.is_leader():
 			# start new instance with c_rnd=my_id*instance_number and v as proposal
 			self.state[self.last_instance] = hp.Instance(self.last_instance, self.id, msg_prop.v_val)
@@ -129,18 +130,20 @@ class Proposer:
 		instance_state = self.state[instance]
 
 		# record messages in this round
-		instance_state.quorum_2b.append(msg_2b.v_rnd)
+		instance_state.quorum_2b.append(msg_2b)
 
+		# if we have a quorum of messages with v_rnd = c_rnd then we can decide
+		if sum(instance_state.c_rnd == item.v_rnd for item in instance_state.quorum_2b) >= self.QUORUM_SIZE:
 
-		# if we have enough messages
-		if len(instance_state.quorum_2b) >= self.QUORUM_SIZE:
-			if all(item == instance_state.c_rnd for item in instance_state.quorum_2b):
-				msg_decision = hp.Message.create_decision(instance, self.id, msg_2b.v_val)
-				self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+			# find the first element with c_rnd = v_rnd to get its v_val
+			v = next((x for x in instance_state.quorum_2b if x.v_rnd == instance_state.c_rnd), None)
 
-				logging.debug("Proposer {}, Instance {} \n\tSent message DECISION to Learners v_val={}".format(self.id,
-				                                                                                               instance,
-				                                                                                               msg_2b.v_val))
+			msg_decision = hp.Message.create_decision(instance, self.id, v.v_val)
+			self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+
+			logging.debug("Proposer {}, Instance {} \n\tSent message DECISION to Learners v_val={}".format(self.id,
+			                                                                                               instance,
+			                                                                                               v.v_val))
 
 		return
 
@@ -157,7 +160,7 @@ class Proposer:
 		if msg_alive.sender_id == self.id: # don't save own leader alive messages or risk never yelding
 			return
 		else:
-			self.last_leader_alive_msg = msg_alive # TODO capire se metterlo qua
+			self.last_leader_alive_msg = msg_alive
 
 		return
 

@@ -143,6 +143,12 @@ class Message():
 
 		return pickle.dumps(msg)
 
+	@classmethod
+	def create_catchuplearner(cls, instance, sender_id):
+		msg = cls(instance, sender_id, "CATCHUPLEARNER", v_val=None)
+
+		return pickle.dumps(msg)
+
 
 	@staticmethod
 	def read_message(data):
@@ -170,5 +176,3 @@ class Instance():
 		self.v_val = None
 		self.v_rnd = 0
 		self.rnd = 0
-
-# TODO fare una classe Message?

@@ -23,8 +23,6 @@ class Client:
 		self.role = "clients"
 		self.id = args["id"]
 
-		self.proposer_id = 1 # TODO tenere conto della leader election, pensare a come fare
-
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
 
