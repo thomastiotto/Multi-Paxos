@@ -2,6 +2,9 @@ import helper as hp
 import logging
 import argparse
 from apscheduler.schedulers.background import BackgroundScheduler
+import time
+from collections import defaultdict
+
 
 # parse the arguments
 ap = argparse.ArgumentParser()
@@ -18,9 +21,12 @@ logging.getLogger('apscheduler').setLevel(logging.WARNING)
 class Learner:
 
 	def __init__(self):
+
+		self.QUORUM_SIZE = 2
+
 		self.switch_handler = {
 			"DECISION": self.handle_decision,
-			"CATCHUPLEARNER": self.handle_catchup
+			"CATCHUPREPL": self.handle_catchup_reply
 		}
 
 		self.role = "learners"
@@ -29,25 +35,64 @@ class Learner:
 		self.decision_queue = []
 		self.next_instance = 1
 
-		self.catchup_queue = []
+		self.catching_up = True
+		self.catchup_instance = 0
+		self.catchup_store = []
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
+		self.catchup_request()
 
-	def learner_catchup(self): # TODO implementare logica di catchup, probabilmente la cosa migliore è chiedere agli acceptors la greatest instance decisa e una volta ricevuta quella da un quorum chiedere i valori fino a lì
+		self.run()
 
-		while all():
-			logging.debug(f"Learner {self.id}\n\tCATCHUPLEARNER instance {instance_request}")
-
-			msg_catchup = hp.Message.create_catchuplearner(instance_request, self.id)
-			self.writeSock.sendto(msg_catchup, hp.send_to_role("proposers"))
+		# self.greatest_instance = self.get_greatest_instance()
 
 
-	def handle_catchup(self, msg_catchup):
+	#################################################################
+	# Begin catchup values
+	#################################################################
 
-		self.catchup_queue.append(msg_catchup)
-		self.catchup_queue = sorted(self.catchup_queue, key=lambda k: k.instance_num)
 
+	def catchup_request(self):
+
+		if self.catching_up:
+			logging.debug("Time {}\tLearner {} \n\tSending CATCHUPREQ".format(int(time.time()), self.id))
+
+			self.catchup_instance += 1
+			msg_catchupreq = hp.Message.create_catchuprequest(self.catchup_instance, self.id)
+			self.writeSock.sendto(msg_catchupreq, hp.send_to_role("acceptors"))
+			self.catchup_store = []
+
+		return
+
+
+	def handle_catchup_reply(self, msg_catchuprepl):
+
+		if self.catching_up:
+			if msg_catchuprepl.instance_num == self.catchup_instance:
+				logging.debug(f"Time {int(time.time())}\tLearner {self.id} \n\tReceived CATCHUREPL from Acceptor {msg_catchuprepl.sender_id}")
+				for key, item in msg_catchuprepl.v_val.items():
+					logging.debug(f"{item}")
+
+				self.catchup_store.append(msg_catchuprepl)
+
+				if len(self.catchup_store) >= self.QUORUM_SIZE:
+					catchup_union = {}
+					for item in self.catchup_store:
+						catchup_union.update(item.v_val)
+
+					for key, item in catchup_union.items():
+						fake_decision = hp.Message.create_decision(key, -1, item)
+						self.decision_queue.append(hp.Message.read_message(fake_decision))
+			return
+
+
+	#################################################################
+	# End catchup values
+	#################################################################
+
+
+	# TODO controllo periodico che tutte le istanze di catchup siano state ricevute e una volta sicuri mettere False (magari basta il quorum)
 
 
 	def handle_decision(self, msg_dec):
@@ -89,7 +134,7 @@ class Learner:
 
 			# logging.debug("Learner {} \n\tWaiting for message".format(self.id))
 
-			data, _ = self.readSock.recvfrom(1024)
+			data, _ = self.readSock.recvfrom(65536)
 			msg = hp.Message.read_message(data)
 			self.switch_handler[msg.phase](msg)
 
@@ -100,10 +145,18 @@ class Learner:
 		catchup_sched.add_job(self.receive())
 		catchup_sched.start()
 
+		# check_alive_sched = BackgroundScheduler()
+		# check_alive_sched.add_job(self.leader_check_alive, 'interval', seconds=3)
+		# check_alive_sched.start()
+
 		logging.debug("I'm {} and my address is ({})".format(self.role, self.multicast_group))
+
+
+
+
 
 
 if __name__ == '__main__':
 
 	learner = Learner()
-	learner.run()
+	# learner.run()

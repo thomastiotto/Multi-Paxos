@@ -2,6 +2,7 @@ import socket
 import struct
 import os
 import pickle
+import time
 
 role_ports = {"clients":   0,
               "proposers": 0,
@@ -136,19 +137,23 @@ class Message():
 
 		return pickle.dumps(msg)
 
-
 	@classmethod
-	def create_leaderalive(cls, instance, sender_id, time):
-		msg = cls(instance, sender_id, "LEADERALIVE", time=time)
+	def create_leaderalive(cls, instance, sender_id):
+		msg = cls(instance, sender_id, "LEADERALIVE", time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
-	def create_catchuplearner(cls, instance, sender_id):
-		msg = cls(instance, sender_id, "CATCHUPLEARNER", v_val=None)
+	def create_catchuprequest(cls, instance, sender_id):
+		msg = cls(instance, sender_id, "CATCHUPREQ", time=time.time())
 
 		return pickle.dumps(msg)
 
+	@classmethod
+	def create_catchupreply(cls, instance, sender_id, v_val):
+		msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_val=v_val)
+
+		return pickle.dumps(msg)
 
 	@staticmethod
 	def read_message(data):

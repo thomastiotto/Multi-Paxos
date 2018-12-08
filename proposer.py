@@ -172,7 +172,7 @@ class Proposer:
 			# logging.debug("Time {}\tLeader {} \n\tSending LEADERALIVE".format(int(time.time()),self.id))
 
 			# send LEADERALIVE adding the last instance this leader has started
-			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id)
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 		return
@@ -189,12 +189,12 @@ class Proposer:
 
 			self.last_leader = self.id  # elect myself as new leader
 
-			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id)
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 			return
 
-		leader_timeout = time.time() - self.last_leader_alive_msg["time"] # check time passed since last LEADERALIVE
+		leader_timeout = time.time() - self.last_leader_alive_msg.time # check time passed since last LEADERALIVE
 
 		# if last LEADERALIVE message is older than 3s I elect myself as leader
 		if leader_timeout > 3:
@@ -204,25 +204,25 @@ class Proposer:
 
 			self.last_leader = self.id  # elect myself as new leader
 
-			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
+			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id)
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 			return
 		else:
 			# if last LEADERALIVE sender has smaller ID than me I elect myself
-			if self.id > self.last_leader_alive_msg["sender_id"]:
+			if self.id > self.last_leader_alive_msg.sender_id:
 				if not self.is_leader():
 					logging.debug("Time {}\tProposer {} \n\tI'm largest proposer".format(int(time.time()), self.id, self.last_leader))
 					logging.debug("Time {}\tProposer {} \n\tProposer {} is now leader".format(int(time.time()),self.id, self.id))
 
 				self.last_leader = self.id  # elect myself as new leader
 
-				msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id, time.time())
+				msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id)
 				self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 			else:
 				if not self.is_leader():
-					logging.debug("Time {}\tProposer {} \n\tProposer {} is now leader".format(int(time.time()), self.id, self.last_leader_alive_msg["sender_id"]))
-				self.last_leader = self.last_leader_alive_msg["sender_id"]
+					logging.debug("Time {}\tProposer {} \n\tProposer {} is now leader".format(int(time.time()), self.id, self.last_leader_alive_msg.sender_id))
+				self.last_leader = self.last_leader_alive_msg.sender_id
 
 				return
 
