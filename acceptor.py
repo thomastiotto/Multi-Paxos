@@ -28,7 +28,7 @@ class Acceptor():
 		self.id = args["id"]
 
 		self.state = {}
-		self.greatest_instance = 0 # TODO vedere se mettere qua o in proposer
+		self.greatest_instance = 0
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
@@ -39,7 +39,7 @@ class Acceptor():
 		for key, item in self.state.items():
 			v_val_data[item.instance_num] = item.v_val
 
-		msg_catchuprepl = hp.Message.create_catchupreply(msg_catchupreq.instance_num, self.id, v_val_data)
+		msg_catchuprepl = hp.Message.create_catchupreply(msg_catchupreq.instance_num, self.id, self.greatest_instance, v_val_data)
 		self.writeSock.sendto(msg_catchuprepl, hp.send_to_role("learners"))
 
 		return
@@ -81,6 +81,10 @@ class Acceptor():
 		if msg_2a.c_rnd >= instance_state.rnd:
 			instance_state.v_rnd = msg_2a.c_rnd
 			instance_state.v_val = msg_2a.c_val
+
+			# save largest instance to send to learners in CATCHUPREPL
+			if msg_2a.instance_num >= self.greatest_instance:
+				self.greatest_instance = msg_2a.instance_num
 
 			msg_2b = hp.Message.create_2b(instance, self.id, instance_state.v_rnd, instance_state.v_val)
 			self.writeSock.sendto(msg_2b, hp.send_to_role("proposers"))

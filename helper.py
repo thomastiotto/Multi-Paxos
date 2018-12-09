@@ -150,8 +150,8 @@ class Message():
 		return pickle.dumps(msg)
 
 	@classmethod
-	def create_catchupreply(cls, instance, sender_id, v_val):
-		msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_val=v_val)
+	def create_catchupreply(cls, instance, sender_id, v_rnd, v_val):
+		msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_rnd=v_rnd, v_val=v_val)
 
 		return pickle.dumps(msg)
 

@@ -38,6 +38,7 @@ class Learner:
 		self.catching_up = True
 		self.catchup_instance = 0
 		self.catchup_store = []
+		self.last_instance_round = 0
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
@@ -69,12 +70,17 @@ class Learner:
 	def handle_catchup_reply(self, msg_catchuprepl):
 
 		if self.catching_up:
+
+			if msg_catchuprepl.v_rnd >= self.last_instance_round:
+				self.last_instance_round = msg_catchuprepl.v_rnd
+
 			if msg_catchuprepl.instance_num == self.catchup_instance:
 				logging.debug(f"Time {int(time.time())}\tLearner {self.id} \n\tReceived CATCHUREPL from Acceptor {msg_catchuprepl.sender_id}")
 				for key, item in msg_catchuprepl.v_val.items():
 					logging.debug(f"{item}")
 
-				self.catchup_store.append(msg_catchuprepl)
+				if msg_catchuprepl.v_val: # don't save empty dict
+					self.catchup_store.append(msg_catchuprepl)
 
 				if len(self.catchup_store) >= self.QUORUM_SIZE:
 					catchup_union = {}
@@ -84,6 +90,9 @@ class Learner:
 					for key, item in catchup_union.items():
 						fake_decision = hp.Message.create_decision(key, -1, item)
 						self.decision_queue.append(hp.Message.read_message(fake_decision))
+
+				self.deliver_decision()
+
 			return
 
 
@@ -93,6 +102,28 @@ class Learner:
 
 
 	# TODO controllo periodico che tutte le istanze di catchup siano state ricevute e una volta sicuri mettere False (magari basta il quorum)
+
+
+	def deliver_decision(self):
+
+		# sort queue by instance number and check if first element is the next one to deliver
+		self.decision_queue = sorted(self.decision_queue, key=lambda k: k.instance_num)
+
+		while len(self.decision_queue) > 0 and self.decision_queue[0].instance_num == self.next_instance:
+
+			if self.catching_up and self.decision_queue[0].instance_num == self.last_instance_round:
+				self.catching_up = False
+
+			if args["debug"] is None:
+				print(self.decision_queue[0].v_val)
+			else:
+				logging.debug("Learner {}, Instance {} \n\tDecided v_val={}".format(self.id,
+				                                                                    self.decision_queue[0].instance_num,
+				                                                                    self.decision_queue[0].v_val))
+			self.next_instance += 1
+			self.decision_queue.pop(0)  # delete the delivered message from queue
+
+		return
 
 
 	def handle_decision(self, msg_dec):
@@ -114,18 +145,7 @@ class Learner:
 		else:
 			self.decision_queue.append(msg_dec) # add message to the queue
 
-		# sort queue by instance number and check if first element is the next one to deliver
-		self.decision_queue = sorted(self.decision_queue, key=lambda k: k.instance_num)
-
-		while len(self.decision_queue) > 0 and self.decision_queue[0].instance_num == self.next_instance:
-			if args["debug"] is None:
-				print(self.decision_queue[0].v_val)
-			else:
-				logging.debug("Learner {}, Instance {} \n\tDecided v_val={}".format(self.id,
-				                                                                    self.decision_queue[0].instance_num,
-				                                                                    self.decision_queue[0].v_val))
-			self.next_instance += 1
-			self.decision_queue.pop(0) # delete the delivered message from queue
+		self.deliver_decision()
 
 
 	def receive(self):
@@ -144,10 +164,6 @@ class Learner:
 		catchup_sched = BackgroundScheduler()
 		catchup_sched.add_job(self.receive())
 		catchup_sched.start()
-
-		# check_alive_sched = BackgroundScheduler()
-		# check_alive_sched.add_job(self.leader_check_alive, 'interval', seconds=3)
-		# check_alive_sched.start()
 
 		logging.debug("I'm {} and my address is ({})".format(self.role, self.multicast_group))
 
