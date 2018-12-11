@@ -23,6 +23,7 @@ class Learner:
 	def __init__(self):
 
 		self.QUORUM_SIZE = 2
+		self.NUM_ACCEPTORS = 3
 
 		self.switch_handler = {
 			"DECISION": self.handle_decision,
@@ -67,7 +68,7 @@ class Learner:
 		return
 
 
-	def handle_catchup_reply(self, msg_catchuprepl):
+	def handle_catchup_reply(self, msg_catchuprepl): # TODO se alla fine non ho un quorum per ogni istanza, mettere None così poi so di non deliverarla
 
 		if self.catching_up:
 
@@ -82,7 +83,8 @@ class Learner:
 				if msg_catchuprepl.v_val: # don't save empty dict
 					self.catchup_store.append(msg_catchuprepl)
 
-				if len(self.catchup_store) >= self.QUORUM_SIZE:
+				if len(self.catchup_store) >= self.QUORUM_SIZE: # TODO importante controllare che ogni istanza mi arrivi da un quorum o rischio di deliverare valori visti da un solo acceptor
+
 					catchup_union = {}
 					for item in self.catchup_store:
 						catchup_union.update(item.v_val)
@@ -101,10 +103,7 @@ class Learner:
 	#################################################################
 
 
-	# TODO controllo periodico che tutte le istanze di catchup siano state ricevute e una volta sicuri mettere False (magari basta il quorum)
-
-
-	def deliver_decision(self):
+	def deliver_decision(self): # TODO se si trova istanza con decisione None, ignorarla perchè non è stata decisa
 
 		# sort queue by instance number and check if first element is the next one to deliver
 		self.decision_queue = sorted(self.decision_queue, key=lambda k: k.instance_num)

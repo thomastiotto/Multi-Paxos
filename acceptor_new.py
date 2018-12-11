@@ -20,8 +20,7 @@ class Acceptor():
 
 		self.switch_handler = {
 			"PHASE1A":  self.handle_1a,
-			"PHASE2A":  self.handle_2a,
-			"CATCHUPREQ": self.handle_catchupreq
+			"PHASE2A":  self.handle_2a
 		}
 
 		self.role = "acceptors"
@@ -31,18 +30,6 @@ class Acceptor():
 		self.greatest_instance = 0
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
-
-
-	def handle_catchupreq(self, msg_catchupreq):
-
-		v_val_data = {}
-		for key, item in self.state.items():
-			v_val_data[item.instance_num] = item.v_val
-
-		msg_catchuprepl = hp.Message.create_catchupreply(msg_catchupreq.instance_num, self.id, self.greatest_instance, v_val_data)
-		self.writeSock.sendto(msg_catchuprepl, hp.send_to_role("learners"))
-
-		return
 
 
 	def handle_1a(self, msg_1a):

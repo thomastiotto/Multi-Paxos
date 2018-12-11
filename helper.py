@@ -14,6 +14,9 @@ multicast_address = ""
 
 first_setup = True
 
+QUORUM_SIZE = 2
+NUM_PROPOSERS = 4
+
 
 def init(role):
 	global first_setup
@@ -149,11 +152,11 @@ class Message():
 
 		return pickle.dumps(msg)
 
-	@classmethod
-	def create_catchupreply(cls, instance, sender_id, v_rnd, v_val):
-		msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_rnd=v_rnd, v_val=v_val)
-
-		return pickle.dumps(msg)
+	# @classmethod
+	# def create_catchupreply(cls, instance, sender_id, v_rnd, v_val):
+	# 	msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_rnd=v_rnd, v_val=v_val)
+	#
+	# 	return pickle.dumps(msg)
 
 	@staticmethod
 	def read_message(data):
@@ -164,13 +167,13 @@ class Message():
 
 class Instance():
 
-	def __init__(self, instance, proc_id=None, v=None):
+	def __init__(self, instance, id, v=None):
 
 		self.instance_num = instance
 
 		###### PROPOSER ######
 		self.v = v
-		self.c_rnd = proc_id * instance
+		self.c_rnd = id # so c_rnd don't overlap when starting new instances for catchup
 		self.c_val = None
 		self.largest_v_rnd = 0
 		self.largest_v_val = None
