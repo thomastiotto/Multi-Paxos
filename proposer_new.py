@@ -47,29 +47,26 @@ class Proposer:
 		self.last_instance_dict = {}
 		self.instance_received = False
 
-		self.catchupreq_dict = {}
-
 		# setup sockets
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
 		if self.id == hp.NUM_PROPOSERS:
 			self.get_greatest_instance()
 
-
-
+	# TODO un proposer potrebbe essersi perso un messaggio e non avere il c_rnd aggiornato... in quel caso dovrebbe provare iterativamente c_rnd sempre più grandi finchè non va...
 	def handle_catchupreq(self, msg_catchupreq):
 
+		logging.debug(f"Proposer {self.id} \n\tReceived message CATCHUPREQ from Learner {msg_catchupreq.sender_id} for instance {msg_catchupreq.instance_num}")
+
+		# create instance or overwrite it
+		old_c_rnd = self.state[msg_catchupreq.instance_num].c_rnd
+		self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None)
+
 		if self.is_leader() and self.instance_received:
-			logging.debug(f"Proposer {self.id} \n\tReceived message CATCHUPREQ from Learner {msg_catchupreq.sender_id} for instance {msg_catchupreq.instance_num}")
-
-			# create instance or overwrite it
-			old_c_rnd = self.state[msg_catchupreq.instance_num].c_rnd # TODO se il leader è morto il nuovo leader non ha le istanze vecchie in dizionario
-			self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None)
-
 			msg_1a = hp.Message.create_1a(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS)
 			self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
 
-			logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent message 1A to Acceptors c_rnd={old_c_rnd + hp.NUM_PROPOSERS}")
+		logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent message 1A to Acceptors c_rnd={old_c_rnd + hp.NUM_PROPOSERS}")
 
 		return
 

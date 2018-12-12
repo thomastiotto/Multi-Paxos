@@ -37,6 +37,23 @@ class Learner:
 
 	# TODO se si trova istanza con decisione None, ignorarla perchè non è stata decisa
 
+
+	def deliver(self):
+
+		for next_decision in sorted(self.decision_dict.keys()):
+			# decide on value if it's the next one I'm expecting
+			if next_decision == self.next_deliver:
+				self.next_deliver += 1
+
+				if self.decision_dict[next_decision].v_val is not None:
+					if args["debug"] is None:
+						print(self.decision_dict[next_decision].v_val)
+					else:
+						logging.debug("Learner {} \n\tInstance {}, decided {}".format(self.id,
+						                                                              next_decision,
+						                                                              self.decision_dict[
+							                                                              next_decision].v_val))
+
 	#################################################################
 	# Begin catchup values
 	#################################################################
@@ -76,20 +93,6 @@ class Learner:
 		else:
 			return False
 
-	def deliver(self):
-
-		for next_decision in sorted(self.decision_dict.keys()):
-			# decide on value if it's the next one I'm expecting
-			if next_decision == self.next_deliver:
-				self.next_deliver += 1
-
-				if args["debug"] is None:
-					print(self.decision_dict[next_decision].v_val)
-				else:
-					logging.debug("Learner {} \n\tInstance {}, decided {}".format(self.id,
-					                                                              next_decision,
-					                                                              self.decision_dict[
-						                                                              next_decision].v_val))
 
 	def check_all_received(self):
 

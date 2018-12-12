@@ -30,23 +30,23 @@ readSock, multicast_group, writeSock = hp.init("proposers")
 
 time.sleep(2)
 
-msg_decision = hp.Message.create_decision(0, 666, 0)
+msg_decision = hp.Message.create_decision(0, 666, None)
 writeSock.sendto(msg_decision, hp.send_to_role("learners"))
 
 time.sleep(2)
 
 msg_decision = hp.Message.create_decision(2, 666, 2)
 writeSock.sendto(msg_decision, hp.send_to_role("learners"))
-
-time.sleep(2)
-
-msg_decision = hp.Message.create_decision(3, 666, 3)
-writeSock.sendto(msg_decision, hp.send_to_role("learners"))
-
-time.sleep(2)
-
-msg_decision = hp.Message.create_decision(1, 666, 1)
-writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+#
+# time.sleep(2)
+#
+# msg_decision = hp.Message.create_decision(3, 666, 3)
+# writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+#
+# time.sleep(2)
+#
+# msg_decision = hp.Message.create_decision(1, 666, 1)
+# writeSock.sendto(msg_decision, hp.send_to_role("learners"))
 
 #
 # time.sleep(2)
