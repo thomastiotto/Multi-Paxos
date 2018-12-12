@@ -106,37 +106,37 @@ class Message():
 	@classmethod
 	def create_proposal(cls, sender_id, v_val):
 		instance = -1
-		msg = cls(instance, sender_id, "PROPOSAL", v_val=v_val)
+		msg = cls(instance, sender_id, "PROPOSAL", v_val=v_val, time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
 	def create_1a(cls, instance, sender_id, c_rnd):
-		msg = cls(instance, sender_id, "PHASE1A", c_rnd=c_rnd)
+		msg = cls(instance, sender_id, "PHASE1A", c_rnd=c_rnd, time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
 	def create_1b(cls, instance, sender_id, rnd, v_rnd, v_val):
-		msg = cls(instance, sender_id, "PHASE1B", rnd=rnd, v_rnd=v_rnd, v_val=v_val)
+		msg = cls(instance, sender_id, "PHASE1B", rnd=rnd, v_rnd=v_rnd, v_val=v_val, time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
 	def create_2a(cls, instance, sender_id, c_rnd, v):
-		msg = cls(instance, sender_id, "PHASE2A", c_rnd=c_rnd, c_val=v)
+		msg = cls(instance, sender_id, "PHASE2A", c_rnd=c_rnd, c_val=v, time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
 	def create_2b(cls, instance, sender_id, v_rnd, v_val):
-		msg = cls(instance, sender_id, "PHASE2B", v_rnd=v_rnd, v_val=v_val)
+		msg = cls(instance, sender_id, "PHASE2B", v_rnd=v_rnd, v_val=v_val, time=time.time())
 
 		return pickle.dumps(msg)
 
 	@classmethod
 	def create_decision(cls, instance, sender_id, v_val):
-		msg = cls(instance, sender_id, "DECISION", v_val=v_val)
+		msg = cls(instance, sender_id, "DECISION", v_val=v_val, time=time.time())
 
 		return pickle.dumps(msg)
 
@@ -152,11 +152,18 @@ class Message():
 
 		return pickle.dumps(msg)
 
-	# @classmethod
-	# def create_catchupreply(cls, instance, sender_id, v_rnd, v_val):
-	# 	msg = cls(instance, sender_id, "CATCHUPREPL", time=time.time(), v_rnd=v_rnd, v_val=v_val)
-	#
-	# 	return pickle.dumps(msg)
+	@classmethod
+	def create_instancereq(cls, sender_id):
+		instance = -1
+		msg = cls(instance, sender_id, "INSTANCEREQ", time=time.time())
+
+		return pickle.dumps(msg)
+
+	@classmethod
+	def create_instancerepl(cls, instance, sender_id):
+		msg = cls(instance, sender_id, "INSTANCEREPL", time=time.time())
+
+		return pickle.dumps(msg)
 
 	@staticmethod
 	def read_message(data):
@@ -164,16 +171,26 @@ class Message():
 
 		return msg
 
+	@staticmethod
+	def has_timedout(msg, delay):
+		if time.time() - msg.time > delay:
+			return True
+		else:
+			return False
+
 
 class Instance():
 
-	def __init__(self, instance, id, v=None):
+	def __init__(self, instance, id, c_rnd=None, v=None):
 
 		self.instance_num = instance
 
 		###### PROPOSER ######
 		self.v = v
-		self.c_rnd = id # so c_rnd don't overlap when starting new instances for catchup
+		if c_rnd == None:
+			self.c_rnd = id # so c_rnd don't overlap when starting new instances for catchup
+		else:
+			self.c_rnd = c_rnd
 		self.c_val = None
 		self.largest_v_rnd = 0
 		self.largest_v_val = None

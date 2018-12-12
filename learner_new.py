@@ -30,21 +30,12 @@ class Learner:
 
 		self.decision_dict = {}
 		self.last_received = 0
-		self.last_delivered = 0
+		self.next_deliver = 0
 		self.max_received = 0
-
-		self.catching_up = True
-		self.catchup_instance = 0
-		self.catchup_store = []
-		self.last_instance_round = 0
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
-		# self.catchup_request()
-
-		self.run()
-
-	# self.greatest_instance = self.get_greatest_instance()
+	# TODO se si trova istanza con decisione None, ignorarla perchè non è stata decisa
 
 	#################################################################
 	# Begin catchup values
@@ -52,12 +43,12 @@ class Learner:
 
 	def catchup_request(self, catchup_instance):
 
-		if self.catching_up:
-			logging.debug("Time {}\tLearner {} \n\tSending CATCHUPREQ for instance {}".format(int(time.time()), self.id,
-			                                                                                  catchup_instance))
 
-			msg_catchupreq = hp.Message.create_catchuprequest(catchup_instance, self.id)
-			self.writeSock.sendto(msg_catchupreq, hp.send_to_role("proposers"))
+		logging.debug("Time {}\tLearner {} \n\tSending CATCHUPREQ for instance {}".format(int(time.time()), self.id,
+		                                                                                  catchup_instance))
+
+		msg_catchupreq = hp.Message.create_catchuprequest(catchup_instance, self.id)
+		self.writeSock.sendto(msg_catchupreq, hp.send_to_role("proposers"))
 
 		return
 
@@ -74,7 +65,7 @@ class Learner:
 		self.deliver()
 
 		# nag for missing values every time
-		for inst in range(self.last_delivered, self.last_received):
+		for inst in range(self.next_deliver, self.last_received):
 			if not self.instance_is_received(inst):
 				self.catchup_request(inst)
 
@@ -89,8 +80,8 @@ class Learner:
 
 		for next_decision in sorted(self.decision_dict.keys()):
 			# decide on value if it's the next one I'm expecting
-			if next_decision == self.last_delivered + 1:
-				self.last_delivered += 1
+			if next_decision == self.next_deliver:
+				self.next_deliver += 1
 
 				if args["debug"] is None:
 					print(self.decision_dict[next_decision].v_val)
@@ -101,6 +92,8 @@ class Learner:
 						                                                              next_decision].v_val))
 
 	def check_all_received(self):
+
+		# logging.debug(f"Learner {self.id} \n\tChecking decisions")
 
 		for inst in self.decision_dict:
 			if not self.instance_is_received(inst):
@@ -114,7 +107,15 @@ class Learner:
 	# End catchup values
 	#################################################################
 
-	def receive(self):
+
+	def run(self):
+
+		# periodically check if all messages are received and nag if not
+		received_sched = BackgroundScheduler()
+		received_sched.add_job(self.check_all_received, 'interval', seconds=1)
+		received_sched.start()
+
+		logging.debug("I'm {} and my address is ({})".format(self.role, self.multicast_group))
 
 		while True:
 			# logging.debug("Learner {} \n\tWaiting for message".format(self.id))
@@ -123,20 +124,8 @@ class Learner:
 			msg = hp.Message.read_message(data)
 			self.switch_handler[msg.phase](msg)
 
-	def run(self):
-
-		catchup_sched = BackgroundScheduler()
-		catchup_sched.add_job(self.receive())
-		catchup_sched.start()
-
-		# periodically check if all messages are received and nag if not
-		received_sched = BackgroundScheduler()
-		received_sched.add_job(self.check_all_received(), 'interval', seconds=1)
-		received_sched.start()
-
-		logging.debug("I'm {} and my address is ({})".format(self.role, self.multicast_group))
 
 
 if __name__ == '__main__':
 	learner = Learner()
-# learner.run()
+	learner.run()

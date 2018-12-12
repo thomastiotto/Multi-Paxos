@@ -20,17 +20,29 @@ class Acceptor():
 
 		self.switch_handler = {
 			"PHASE1A":  self.handle_1a,
-			"PHASE2A":  self.handle_2a
+			"PHASE2A":  self.handle_2a,
+			"INSTANCEREQ": self.handle_instancereq
 		}
 
 		self.role = "acceptors"
 		self.id = args["id"]
 
 		self.state = {}
-		self.greatest_instance = 0
+
+		self.greatest_instance = -1
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
 
+	def handle_instancereq(self, msg_instancereq):
+
+		logging.debug(f"Acceptor {self.id} \n\tReceived message INSTANCEREQ from Proposer {msg_instancereq.sender_id}")
+
+		msg_instancerepl = hp.Message.create_instancerepl(self.greatest_instance, self.id)
+		self.writeSock.sendto(msg_instancerepl, hp.send_to_role("proposers"))
+
+		logging.debug(f"Acceptor {self.id} \n\tSent message INSTANCEREPL to Proposer {msg_instancereq.sender_id} with instance {self.greatest_instance}")
+
+		return
 
 	def handle_1a(self, msg_1a):
 
@@ -41,20 +53,23 @@ class Acceptor():
 
 		instance = msg_1a.instance_num
 
+		if instance > self.greatest_instance:
+			self.greatest_instance = instance
 
 		if not instance in self.state: # check if instance already exists
 			# start logging new instance
 			self.state[instance] = hp.Instance(instance, self.id)
-			instance_state = self.state[instance]
 
-			if msg_1a.c_rnd > instance_state.rnd:
-				instance_state.rnd = msg_1a.c_rnd
+		instance_state = self.state[instance]
 
-				# msg_1b = hp.create_message(instance_num=instance ,sender_id=self.id, phase="PHASE1B", rnd=instance_state.rnd, v_rnd=instance_state.v_rnd, v_val=instance_state.v_val)
-				msg_1b = hp.Message.create_1b(instance, self.id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val)
-				self.writeSock.sendto(msg_1b, hp.send_to_role("proposers"))
+		if msg_1a.c_rnd > instance_state.rnd:
+			instance_state.rnd = msg_1a.c_rnd
 
-				logging.debug("Acceptor {}, Instance {}\n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, instance, msg_1a.sender_id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val))
+			# msg_1b = hp.create_message(instance_num=instance ,sender_id=self.id, phase="PHASE1B", rnd=instance_state.rnd, v_rnd=instance_state.v_rnd, v_val=instance_state.v_val)
+			msg_1b = hp.Message.create_1b(instance, self.id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val)
+			self.writeSock.sendto(msg_1b, hp.send_to_role("proposers"))
+
+			logging.debug("Acceptor {}, Instance {}\n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, instance, msg_1a.sender_id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val))
 
 		return
 
@@ -66,14 +81,13 @@ class Acceptor():
 		instance = msg_2a.instance_num
 		instance_state = self.state[instance]
 
+		if instance > self.greatest_instance:
+			self.greatest_instance = instance
+
 		# discard old proposals
 		if msg_2a.c_rnd >= instance_state.rnd:
 			instance_state.v_rnd = msg_2a.c_rnd
 			instance_state.v_val = msg_2a.c_val
-
-			# save largest instance to send to learners in CATCHUPREPL
-			if msg_2a.instance_num >= self.greatest_instance:
-				self.greatest_instance = msg_2a.instance_num
 
 			msg_2b = hp.Message.create_2b(instance, self.id, instance_state.v_rnd, instance_state.v_val)
 			self.writeSock.sendto(msg_2b, hp.send_to_role("proposers"))
@@ -91,7 +105,7 @@ class Acceptor():
 
 			# logging.debug("Acceptor {} \n\tWaiting for message".format(self.id))
 
-			data, _ = self.readSock.recvfrom(1024)
+			data, _ = self.readSock.recvfrom(65536)
 			msg = hp.Message.read_message(data)
 			self.switch_handler[msg.phase](msg)
 
