@@ -1,6 +1,5 @@
 import socket
 import struct
-import os
 import pickle
 import time
 
@@ -18,11 +17,11 @@ QUORUM_SIZE = 2
 NUM_PROPOSERS = 4
 
 
-def init(role):
+def init(role, conf):
 	global first_setup
 
 	if first_setup:
-		read_conf()
+		read_conf(conf)
 		first_setup = False
 
 	return multicast_setup(multicast_address, role_ports[role])  # return sockets
@@ -72,11 +71,11 @@ def send_to_role(role):
 
 
 # read parameters from configuration file
-def read_conf():
+def read_conf(conf):
 	# open configuration file
-	working_directory = os.getcwd()
-	file_path = working_directory + '/conf.txt'
-	f = open(file_path, "r")
+	# working_directory = os.getcwd()
+	# file_path = working_directory + conf
+	f = open(conf, "r")
 
 	if f.mode == "r":
 		contents = f.read().splitlines()

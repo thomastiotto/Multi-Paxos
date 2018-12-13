@@ -1,13 +1,13 @@
-import helper as hp
+from Paxos_v3 import helper as hp
 import logging
 import argparse
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
-from collections import defaultdict
 
 # parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("id", type=int)
+ap.add_argument("conf", type=str)
 ap.add_argument("-d", "--debug")
 args = vars(ap.parse_args())
 
@@ -33,7 +33,7 @@ class Learner:
 		self.next_deliver = 0
 		self.max_received = 0
 
-		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
+		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
 
 	# TODO se si trova istanza con decisione None, ignorarla perchè non è stata decisa
 

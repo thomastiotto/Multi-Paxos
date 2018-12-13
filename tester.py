@@ -1,4 +1,4 @@
-import helper as hp
+from Paxos_v3 import helper as hp
 import time
 
 # TODO test con due leader e vedere cosa viene deciso

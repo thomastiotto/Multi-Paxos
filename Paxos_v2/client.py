@@ -1,4 +1,4 @@
-import helper as hp
+from Paxos_v3 import helper as hp
 import os
 import logging
 import argparse
@@ -6,6 +6,7 @@ import argparse
 # parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("id", type=int)
+ap.add_argument("conf", type=str)
 ap.add_argument("-v", "--values")
 ap.add_argument("-d", "--debug")
 args = vars(ap.parse_args())
@@ -23,7 +24,7 @@ class Client:
 		self.role = "clients"
 		self.id = args["id"]
 
-		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
+		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
 
 
 	def run(self):

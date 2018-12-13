@@ -1,4 +1,4 @@
-import helper as hp
+from Paxos_v3 import helper as hp
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
@@ -7,6 +7,7 @@ import argparse
 # parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("id", type=int)
+ap.add_argument("conf", type=str)
 ap.add_argument("-d", "--debug")
 args = vars(ap.parse_args())
 
@@ -22,11 +23,8 @@ class Proposer:
 
 		self.switch_handler = {
 			"PROPOSAL":    self.handle_proposal,
-			"PHASE1A":     None,
 			"PHASE1B":     self.handle_1b,
-			"PHASE2A":     None,
 			"PHASE2B":     self.handle_2b,
-			"DECISION":    None,
 			"LEADERALIVE": self.handle_leader_alive,
 			"CATCHUPREQ":  self.handle_catchupreq,
 			"INSTANCEREPL": self.handle_instancerepl
@@ -48,7 +46,7 @@ class Proposer:
 		self.instance_received = False
 
 		# setup sockets
-		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role)
+		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
 
 		if self.id == hp.NUM_PROPOSERS:
 			self.get_greatest_instance()
