@@ -1,4 +1,4 @@
-from Paxos_PauloCompliant import helper as hp
+import PaxosHelper as hp
 import logging
 import argparse
 

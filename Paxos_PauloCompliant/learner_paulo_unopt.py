@@ -33,11 +33,7 @@ class Learner:
 		self.last_received = 0
 		self.next_deliver = 0
 
-		# keep track of already delivered instances to not have doubles
-		self.delivered_dict = {}
-
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
-
 
 	def deliver(self):
 
@@ -47,7 +43,6 @@ class Learner:
 				self.next_deliver += 1
 
 				if self.decision_dict[next_decision].v_val is not None:
-					self.delivered_dict[self.decision_dict[next_decision].instance_num] = self.decision_dict[next_decision]
 					if args["debug"] is None:
 						print(self.decision_dict[next_decision].v_val, flush=True)
 					else:
@@ -62,6 +57,7 @@ class Learner:
 
 	def catchup_request(self, catchup_instance):
 
+
 		logging.debug("Time {}\tLearner {} \n\tSending CATCHUPREQ for instance {}".format(int(time.time()), self.id, catchup_instance))
 
 		msg_catchupreq = hp.Message.create_catchuprequest(catchup_instance, self.id)
@@ -70,10 +66,6 @@ class Learner:
 		return
 
 	def handle_decision(self, msg_dec):
-
-		# discard duplicate instances
-		if msg_dec.instance_num in self.delivered_dict:
-			return
 
 		logging.debug("Learner {}, Instance {} \n\tReceived DECISION from Proposer {} v_val={}".format(self.id,
 		                                                                                               msg_dec.instance_num,
@@ -84,24 +76,10 @@ class Learner:
 		self.decision_dict[msg_dec.instance_num] = msg_dec
 		self.request_dict[msg_dec.instance_num] = 0  # the current instance is received and thus not to be requested
 
+		# nag for missing values every time
 		for inst in range(self.next_deliver, self.last_received):
-			# if instance is received then don't request it again
-			if self.instance_is_received(inst):
-				self.request_dict[inst] = 0
-				logging.debug(f"Skipped instance {inst} as it is already received")
-			else:
-				# if instance hasn't been requested yet then request it and record the request
-				if inst not in self.request_dict:
-					self.request_dict[inst] = time.time()
-					self.catchup_request(inst)
-					logging.debug(f"Asked instance {inst} as it is wasn't requested yet")
-				else:
-					# if instance has been requested more than 2 seconds ago then request it again and update request time
-					# (already received instances have time 0 so will certainly not be requested again)
-					if time.time() - self.request_dict[inst] > 2:
-						self.request_dict[inst] = time.time()
-						self.catchup_request(inst)
-						logging.debug(f"Asked instance {inst} as it timed out")
+			if not self.instance_is_received(inst):
+				self.catchup_request(inst)
 
 		self.deliver() # attempt to deliver messages
 

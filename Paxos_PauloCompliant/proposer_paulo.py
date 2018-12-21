@@ -1,4 +1,4 @@
-from Paxos_PauloCompliant import helper as hp
+import PaxosHelper as hp
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
@@ -16,6 +16,8 @@ if args["debug"] is not None:
 	logging.basicConfig(level=args["debug"].upper())
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
+# TODO ottimizzazione: mandare DECISION a tutti i proposers così possono rispondere con valori salvati e non devono per forza rifare Paxos
+
 
 class Proposer:
 
@@ -27,7 +29,8 @@ class Proposer:
 			"PHASE2B":     self.handle_2b,
 			"LEADERALIVE": self.handle_leader_alive,
 			"CATCHUPREQ":  self.handle_catchupreq,
-			"INSTANCEREPL": self.handle_instancerepl
+			"INSTANCEREPL": self.handle_instancerepl,
+			"DECISION":      self.handle_decision
 		}
 
 		self.role = "proposers"
@@ -45,26 +48,44 @@ class Proposer:
 		self.last_instance_dict = {}
 		self.instance_received = False
 
+		# save decisions for cheap replies to learners
+		self.past_decisions = {}
+
 		# setup sockets
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
 
 		if self.id == hp.NUM_PROPOSERS:
 			self.get_greatest_instance()
 
-	# TODO un proposer potrebbe essersi perso un messaggio e non avere il c_rnd aggiornato... in quel caso dovrebbe provare iterativamente c_rnd sempre più grandi finchè non va...
+	def handle_decision(self, msg_decision):
+
+		logging.debug(f"Proposer {self.id} \n\tReceived message DECISION from Leader {msg_decision.sender_id} v_val={msg_decision.v_val}")
+
+		# save decision for future quick catchup replies
+		self.past_decisions[msg_decision.instance_num] = msg_decision.v_val
+
+		return
+
 	def handle_catchupreq(self, msg_catchupreq):
 
 		logging.debug(f"Proposer {self.id} \n\tReceived message CATCHUPREQ from Learner {msg_catchupreq.sender_id} for instance {msg_catchupreq.instance_num}")
 
-		# create instance or overwrite it
-		old_c_rnd = self.state[msg_catchupreq.instance_num].c_rnd
-		self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None)
+		# if we already have a quick decision saved, send it to the learner or else start a new instance of Paxos
+		if self.is_leader() and self.instance_received and msg_catchupreq.instance_num in self.past_decisions:
+			msg_decision = hp.Message.create_decision(msg_catchupreq.instance_num, self.id, self.past_decisions[msg_catchupreq.instance_num])
+			self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
 
-		if self.is_leader() and self.instance_received:
-			msg_1a = hp.Message.create_1a(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS)
-			self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
+			logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent quick reply to Learners v_val={self.past_decisions[msg_catchupreq.instance_num]}")
+		else:
+			# create instance or overwrite it
+			old_c_rnd = self.state[msg_catchupreq.instance_num].c_rnd
+			self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None)
 
-		logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent message 1A to Acceptors c_rnd={old_c_rnd + hp.NUM_PROPOSERS}")
+			if self.is_leader() and self.instance_received:
+				msg_1a = hp.Message.create_1a(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS)
+				self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
+
+			logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent message 1A to Acceptors c_rnd={old_c_rnd + hp.NUM_PROPOSERS}")
 
 		return
 
@@ -160,10 +181,13 @@ class Proposer:
 			if self.is_leader() and self.instance_received:
 				msg_decision = hp.Message.create_decision(instance, self.id, v.v_val)
 				self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+				self.writeSock.sendto(msg_decision, hp.send_to_role("proposers"))
 
-				logging.debug("Proposer {}, Instance {} \n\tSent message DECISION to Learners v_val={}".format(self.id,
+				logging.debug("Proposer {}, Instance {} \n\tSent message DECISION to Learners and Proposers v_val={}".format(self.id,
 			                                                                                               instance,
 			                                                                                               v.v_val))
+
+		# TODO On decision il leader manda ad altri proposers cval e crnd così on catchup non devono rifare Paxos
 
 		return
 
