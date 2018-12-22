@@ -34,6 +34,7 @@ class Acceptor():
 
 		self.readSock, self.multicast_group, self.writeSock = hp.init(self.role, args["conf"])
 
+	# reply to an instance request y a Proposer by sending the greatest instance number seen
 	def handle_instancereq(self, msg_instancereq):
 
 		logging.debug(f"Acceptor {self.id} \n\tReceived message INSTANCEREQ from Proposer {msg_instancereq.sender_id}")
@@ -66,14 +67,12 @@ class Acceptor():
 		if msg_1a.c_rnd > instance_state.rnd:
 			instance_state.rnd = msg_1a.c_rnd
 
-			# msg_1b = hp.create_message(instance_num=instance ,sender_id=self.id, phase="PHASE1B", rnd=instance_state.rnd, v_rnd=instance_state.v_rnd, v_val=instance_state.v_val)
 			msg_1b = hp.Message.create_1b(instance, self.id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val)
 			self.writeSock.sendto(msg_1b, hp.send_to_role("proposers"))
 
 			logging.debug("Acceptor {}, Instance {}\n\tSent message 1B to Proposer {} rnd={} v_rnd={} v_val={}".format(self.id, instance, msg_1a.sender_id, instance_state.rnd, instance_state.v_rnd, instance_state.v_val))
 
 		return
-
 
 	def handle_2a(self, msg_2a):
 
@@ -96,7 +95,6 @@ class Acceptor():
 			logging.debug("Acceptor {}, Instance {} \n\tSent message 2B to Proposer {} v_rnd={} v_val={}".format(self.id, instance, msg_2a.sender_id, instance_state.v_rnd, instance_state.v_val))
 
 		return
-
 
 	def run(self):
 

@@ -16,8 +16,6 @@ if args["debug"] is not None:
 	logging.basicConfig(level=args["debug"].upper())
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
-# TODO ottimizzazione: mandare DECISION a tutti i proposers così possono rispondere con valori salvati e non devono per forza rifare Paxos
-
 
 class Proposer:
 
@@ -46,7 +44,7 @@ class Proposer:
 		self.instance = None
 		self.last_instance = 0
 		self.last_instance_dict = {}
-		self.instance_received = False
+		self.instance_received = False # when True, the Proposer has received the greatest instance from a quorum of Acceptors
 
 		# save decisions for cheap replies to learners
 		self.past_decisions = {}
@@ -57,6 +55,7 @@ class Proposer:
 		if self.id == hp.NUM_PROPOSERS:
 			self.get_greatest_instance()
 
+	# each proposer keeps track of decided value in each instance so it can quickly send it to a Learner who is catching up
 	def handle_decision(self, msg_decision):
 
 		logging.debug(f"Proposer {self.id} \n\tReceived message DECISION from Leader {msg_decision.sender_id} v_val={msg_decision.v_val}")
@@ -66,20 +65,21 @@ class Proposer:
 
 		return
 
+	# reply to a Learner catchup request
 	def handle_catchupreq(self, msg_catchupreq):
 
 		logging.debug(f"Proposer {self.id} \n\tReceived message CATCHUPREQ from Learner {msg_catchupreq.sender_id} for instance {msg_catchupreq.instance_num}")
 
-		# if we already have a quick decision saved, send it to the learner or else start a new instance of Paxos
+		# if we already have a quick decision saved, send it to the Learner or else start a new instance of Paxos
 		if self.is_leader() and self.instance_received and msg_catchupreq.instance_num in self.past_decisions:
 			msg_decision = hp.Message.create_decision(msg_catchupreq.instance_num, self.id, self.past_decisions[msg_catchupreq.instance_num])
 			self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
 
 			logging.debug(f"Proposer {self.id}, Instance {msg_catchupreq.instance_num} \n\tSent quick reply to Learners v_val={self.past_decisions[msg_catchupreq.instance_num]}")
 		else:
-			# create instance or overwrite it
+			# create new instance or overwrite it (we don't need info saved in old instance)
 			old_c_rnd = self.state[msg_catchupreq.instance_num].c_rnd
-			self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None)
+			self.state[msg_catchupreq.instance_num] = hp.Instance(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS, None) # the c_rnd is guaranteed to be larger than the last, so the Acceptros will reply
 
 			if self.is_leader() and self.instance_received:
 				msg_1a = hp.Message.create_1a(msg_catchupreq.instance_num, self.id, old_c_rnd + hp.NUM_PROPOSERS)
@@ -89,6 +89,7 @@ class Proposer:
 
 		return
 
+	# handle a proposal request from a Client by starting a new instance of Paxos
 	def handle_proposal(self, msg_prop):
 
 		# start new instance with c_rnd=my_id*instance_number and v as proposal
@@ -97,6 +98,7 @@ class Proposer:
 		logging.debug("Proposer {} \n\tReceived message PROPOSAL from Client {} v_val={}".format(self.id,
 		                                                                                         msg_prop.sender_id,
 		                                                                                         msg_prop.v_val))
+
 		if self.is_leader() and self.instance_received:
 			msg_1a = hp.Message.create_1a(self.last_instance, self.id, self.state[self.last_instance].c_rnd)
 			self.writeSock.sendto(msg_1a, hp.send_to_role("acceptors"))
@@ -109,7 +111,6 @@ class Proposer:
 		return
 
 	def handle_1b(self, msg_1b):
-
 
 			logging.debug(
 				"Proposer {}, Instance {} \n\tReceived message 1B from Acceptor {} rnd={} v_rnd={} v_val={}".format(
@@ -134,7 +135,7 @@ class Proposer:
 			# if we have enough messages
 			if instance_state.quorum_1b >= hp.QUORUM_SIZE:
 
-				# send the client's value if not previous values are present
+				# send the client's value if no previous values are present in Acceotors
 				if instance_state.largest_v_rnd == 0:
 					v = instance_state.v
 				else:
@@ -155,16 +156,13 @@ class Proposer:
 
 	def handle_2b(self, msg_2b):
 
-		# only look at messages addressed to me and for current round
-		# if msg_2b["sender_id"] != self.id:
-		# 	return
-
 		logging.debug(
 			"Proposer {}, Instance {} \n\tReceived message 2B from Acceptor {} v_rnd={} v_val={}".format(self.id,
 			                                                                                             msg_2b.instance_num,
 			                                                                                             msg_2b.sender_id,
 			                                                                                             msg_2b.v_rnd,
 			                                                                                             msg_2b.v_val))
+
 		instance = msg_2b.instance_num
 		instance_state = self.state[instance]
 
@@ -176,8 +174,6 @@ class Proposer:
 			# find the first element with c_rnd = v_rnd to get its v_val
 			v = next((x for x in instance_state.quorum_2b if x.v_rnd == instance_state.c_rnd), None)
 
-			# instance_state.c_rnd = msg_2b.v_rnd # for safety try to keep c_rnd of proposers in sync if leader dies
-
 			if self.is_leader() and self.instance_received:
 				msg_decision = hp.Message.create_decision(instance, self.id, v.v_val)
 				self.writeSock.sendto(msg_decision, hp.send_to_role("learners"))
@@ -187,14 +183,13 @@ class Proposer:
 			                                                                                               instance,
 			                                                                                               v.v_val))
 
-		# TODO On decision il leader manda ad altri proposers cval e crnd così on catchup non devono rifare Paxos
-
 		return
 
 	#################################################################
 	# Begin leader election
 	#################################################################
 
+	# handle request to get the latest instance, seen by a quorum of Acceptors
 	def handle_instancerepl(self, msg_instancerepl):
 
 		logging.debug(f"Proposer {self.id} \n\tReceived message INSTANCEREPL from Acceptor {msg_instancerepl.sender_id} with instance {msg_instancerepl.instance_num}")
@@ -212,7 +207,7 @@ class Proposer:
 
 		return
 
-	# get greatest instance from acceptors when becoming leader
+	# request greatest instance from acceptors when becoming leader
 	def get_greatest_instance(self):
 
 		logging.debug(f"Proposer {self.id} \n\tSent message INSTANCEREQ")
@@ -222,7 +217,7 @@ class Proposer:
 
 		return
 
-	# Save the last LEADERALIVE message received
+	# save the last LEADERALIVE message received to check for leader timeout
 	def handle_leader_alive(self, msg_alive):
 
 		if msg_alive.sender_id == self.id:  # don't save own leader alive messages or risk never yelding
@@ -232,26 +227,26 @@ class Proposer:
 
 		return
 
-	# The current leader sends a LEADERALIVE heartbeat
+	# the current leader sends a LEADERALIVE heartbeat
 	def leader_send_alive(self):
 
 		if self.is_leader():
 			# logging.debug("Time {}\tLeader {} \n\tSending LEADERALIVE".format(int(time.time()),self.id))
 
-			# send LEADERALIVE adding the last instance this leader has started
+			# send LEADERALIVE adding the last instance that this leader has started
 			msg_alive = hp.Message.create_leaderalive(self.last_instance, self.id)
 			self.writeSock.sendto(msg_alive, hp.send_to_role("proposers"))
 
 		return
 
-	# All other proposers check that the leader is still alive by looking at last LEADERALIVE received
+	# all other proposers check that the leader is still alive by looking at last LEADERALIVE received
 	def leader_check_alive(self):
 
-		# check if the current leader has received enough instance messages
+		# check if the current leader has received enough instance messages to run Paxos
 		if self.is_leader() and not self.instance_received:
 			self.get_greatest_instance()
 
-		# If I never received a LEADERALIVE then proposer 4 was never started or crashed so I elect myself
+		# if I never received a LEADERALIVE then proposer 4 was never started or crashed so I elect myself
 		if self.last_leader_alive_msg == None:
 			if not self.is_leader():
 				logging.debug(
@@ -310,6 +305,7 @@ class Proposer:
 
 				return
 
+	# return True if I am leader
 	def is_leader(self):
 
 		if self.last_leader == self.id:
