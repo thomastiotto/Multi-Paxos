@@ -1,4 +1,4 @@
-from Paxos_PauloCompliant import PaxosHelper as hp
+from core import PaxosHelper as hp
 import time
 import argparse
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -32,15 +32,13 @@ sched.start()
 
 time.sleep(2)
 
-# for i in reversed(range(100)):
-#
-# 	time.sleep(0.0001)
-# 	print(f"Sent decision {i}")
-# 	msg_decision = hp.Message.create_decision(i, 666, i)
-# 	writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+for i in range(100):
 
-msg_decision = hp.Message.create_proposal(666, 1)
-writeSock.sendto(msg_decision, hp.send_to_role("proposers"))
+	time.sleep(0.0001)
+	print(f"Sent decision {i}")
+	msg_decision = hp.Message.create_decision(i, 666, i)
+	writeSock.sendto(msg_decision, hp.send_to_role("learners"))
+
 
 
 

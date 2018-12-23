@@ -48,6 +48,7 @@ class Learner:
 
 				if self.decision_dict[next_decision].v_val is not None:
 					self.delivered_dict[self.decision_dict[next_decision].instance_num] = self.decision_dict[next_decision]
+
 					if args["debug"] is None:
 						print(self.decision_dict[next_decision].v_val, flush=True)
 					else:
